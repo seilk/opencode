@@ -1,0 +1,24 @@
+diff --git a/packages/opencode/src/session/prompt.ts b/packages/opencode/src/session/prompt.ts
+index 9325583ac..842995c59 100644
+--- a/packages/opencode/src/session/prompt.ts
++++ b/packages/opencode/src/session/prompt.ts
+@@ -292,10 +292,16 @@ export namespace SessionPrompt {
+       }
+ 
+       if (!lastUser) throw new Error("No user message found in stream. This should never happen.")
++
++      // Workaround: some providers (Gemini/LiteLLM) return "stop" instead of "tool-calls" in streaming mode
++      const lastAssistantMsg = msgs.find((m) => m.info.id === lastAssistant?.id)
++      const hasToolParts = lastAssistantMsg?.parts.some((p) => p.type === "tool")
++      const effectiveFinishReason = hasToolParts ? "tool-calls" : lastAssistant?.finish
++
+       if (
+-        lastAssistant?.finish &&
+-        !["tool-calls", "unknown"].includes(lastAssistant.finish) &&
+-        lastUser.id < lastAssistant.id
++        effectiveFinishReason &&
++        !["tool-calls", "unknown"].includes(effectiveFinishReason) &&
++        lastUser.id < lastAssistant!.id
+       ) {
+         log.info("exiting loop", { sessionID })
+         break
