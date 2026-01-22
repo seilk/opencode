@@ -13,8 +13,8 @@ Fork of [anomalyco/opencode](https://github.com/anomalyco/opencode) with patches
 ## Usage
 
 ```bash
-git clone git@github.com:seilk/opencode.git
-cd opencode
+git clone git@github.com:seilk/opencode.git opencode-custom
+cd opencode-custom
 ./update-and-build.sh
 ```
 
