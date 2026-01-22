@@ -1,13 +1,30 @@
 #!/bin/bash
 set -e
 
-cd "$(dirname "$0")"
+REPO_DIR="$(cd "$(dirname "$0")" && pwd)"
+TMP_DIR="$HOME/tmp"
+
+cd "$REPO_DIR"
+
+mkdir -p "$TMP_DIR"
+
+if ! git remote get-url upstream &>/dev/null; then
+    echo "=== Adding upstream remote ==="
+    git remote add upstream https://github.com/anomalyco/opencode.git
+fi
 
 echo "=== Fetching latest from upstream ==="
 git fetch upstream --tags
 
 LATEST_TAG=$(git tag -l 'v1.*' | sort -V | tail -1)
+if [ -z "$LATEST_TAG" ]; then
+    echo "ERROR: No tags found. Make sure upstream is accessible."
+    exit 1
+fi
 echo "Latest tag: $LATEST_TAG"
+
+echo "=== Backing up patch ==="
+cp "$REPO_DIR/patches/fix-gemini-finish-reason.patch" "$TMP_DIR/fix-gemini-finish-reason.patch"
 
 BRANCH_NAME="fix-gemini-finish-reason-${LATEST_TAG}"
 echo "=== Creating branch: $BRANCH_NAME ==="
@@ -16,11 +33,11 @@ git stash 2>/dev/null || true
 git checkout -B "$BRANCH_NAME" "$LATEST_TAG"
 
 echo "=== Applying patch ==="
-if git apply --check patches/fix-gemini-finish-reason.patch 2>/dev/null; then
-    git apply patches/fix-gemini-finish-reason.patch
+if git apply --check "$TMP_DIR/fix-gemini-finish-reason.patch" 2>/dev/null; then
+    git apply "$TMP_DIR/fix-gemini-finish-reason.patch"
 else
     echo "Trying 3-way merge..."
-    git apply --3way patches/fix-gemini-finish-reason.patch || {
+    git apply --3way "$TMP_DIR/fix-gemini-finish-reason.patch" || {
         echo "ERROR: Patch failed. Manual intervention required."
         exit 1
     }
