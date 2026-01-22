@@ -153,10 +153,12 @@ cd ~/opencode-custom
 ```
 
 The script automatically:
-1. `git fetch upstream --tags` - Fetch latest tags
-2. Create new branch based on latest tag
-3. Apply patches
-4. Build and install
+1. Add `upstream` remote if not exists (points to official OpenCode repo)
+2. `git fetch upstream --tags` - Fetch latest tags
+3. Backup patch files to `~/tmp/` (survives branch switch)
+4. Create new branch based on latest tag
+5. Apply patches from `~/tmp/`
+6. Build and install
 
 ### Resolving Patch Conflicts
 
@@ -164,10 +166,14 @@ If the patch fails to apply (upstream code changed significantly):
 
 ```bash
 # If script fails, proceed manually
+# First, backup patch to ~/tmp/ (script does this automatically)
+cp patches/fix-gemini-finish-reason.patch ~/tmp/
+
+# Checkout the new version
 git checkout -b fix-gemini-finish-reason-vX.X.X vX.X.X
 
 # Try patch with 3-way merge
-git apply --3way patches/fix-gemini-finish-reason.patch
+git apply --3way ~/tmp/fix-gemini-finish-reason.patch
 
 # If conflict occurs, resolve manually
 vim packages/opencode/src/session/prompt.ts
@@ -176,9 +182,10 @@ vim packages/opencode/src/session/prompt.ts
 git add .
 git commit -m "fix: Gemini/LiteLLM finish_reason workaround"
 
-# Update patch file
-git diff vX.X.X -- packages/opencode/src/session/prompt.ts > patches/fix-gemini-finish-reason.patch
+# Update patch file in main branch
+git diff vX.X.X -- packages/opencode/src/session/prompt.ts > ~/tmp/fix-gemini-finish-reason.patch
 git checkout main
+cp ~/tmp/fix-gemini-finish-reason.patch patches/fix-gemini-finish-reason.patch
 git add patches/fix-gemini-finish-reason.patch
 git commit -m "Update patch for vX.X.X"
 git push origin main
@@ -230,6 +237,8 @@ cd packages/opencode && bun run build
 ```
 
 ### Missing upstream Remote
+
+The script automatically adds upstream remote if missing. If you need to do it manually:
 
 ```bash
 git remote add upstream https://github.com/anomalyco/opencode.git
