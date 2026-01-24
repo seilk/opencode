@@ -23,6 +23,12 @@ if [ -z "$LATEST_TAG" ]; then
 fi
 echo "Latest tag: $LATEST_TAG"
 
+CURRENT_VERSION=$(git branch -l 'fix-gemini-finish-reason-v*' | sort -V | tail -1 | sed 's/.*-\(v[0-9.]*\)/\1/')
+if [ "$CURRENT_VERSION" = "$LATEST_TAG" ]; then
+    echo "Already up to date: $LATEST_TAG"
+    exit 0
+fi
+
 echo "=== Backing up patch ==="
 cp "$REPO_DIR/patches/fix-gemini-finish-reason.patch" "$TMP_DIR/fix-gemini-finish-reason.patch"
 
