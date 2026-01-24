@@ -29,17 +29,6 @@ cp "$REPO_DIR/patches/fix-gemini-finish-reason.patch" "$TMP_DIR/fix-gemini-finis
 BRANCH_NAME="fix-gemini-finish-reason-${LATEST_TAG}"
 echo "=== Creating branch: $BRANCH_NAME ==="
 
-# Auto-commit changes before switching branch
-CURRENT_BRANCH=$(git branch --show-current)
-if [ "$CURRENT_BRANCH" != "main" ]; then
-    if ! git diff --quiet || ! git diff --cached --quiet; then
-        echo "=== Auto-committing changes on $CURRENT_BRANCH ==="
-        git add -A
-        git commit -m "chore: auto-save before upgrade"
-    fi
-    git checkout main
-fi
-
 git checkout -B "$BRANCH_NAME" "$LATEST_TAG"
 
 echo "=== Applying patch ==="
@@ -67,6 +56,10 @@ BINARY_NAME="opencode-fix-gemini-${LATEST_TAG}"
 mkdir -p ~/.opencode/bin
 cp dist/opencode-linux-x64/bin/opencode ~/.opencode/bin/"$BINARY_NAME"
 ln -sf "$BINARY_NAME" ~/.opencode/bin/opencode
+
+echo "=== Committing changes ==="
+git add -A
+git commit -m "feat: apply custom patch on $LATEST_TAG"
 
 echo ""
 echo "=== Done ==="
