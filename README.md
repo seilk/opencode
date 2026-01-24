@@ -20,9 +20,11 @@ cd opencode-custom
 
 This will:
 1. Fetch the latest tag from upstream
-2. Create a patched branch `fix-gemini-finish-reason-vX.X.X`
-3. Apply the patch
-4. Build and install to `~/.opencode/bin/`
+2. Skip if already on the latest version
+3. Create a patched branch `fix-gemini-finish-reason-vX.X.X`
+4. Apply the patch
+5. Build and install to `~/.opencode/bin/`
+6. Auto-commit all changes to the new branch
 
 Add to PATH:
 ```bash
