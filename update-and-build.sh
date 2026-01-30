@@ -76,6 +76,14 @@ else
     BINARY_PATH="dist/opencode-linux-x64/bin/opencode"
 fi
 
+ORIGINAL_OPENCODE=$(command -v opencode 2>/dev/null || true)
+if [ -n "$ORIGINAL_OPENCODE" ] && [ -f "$ORIGINAL_OPENCODE" ] && [ ! -L "$ORIGINAL_OPENCODE" ]; then
+    if [ ! -f "${ORIGINAL_OPENCODE}.bak" ]; then
+        echo "Backing up original opencode to ${ORIGINAL_OPENCODE}.bak"
+        cp "$ORIGINAL_OPENCODE" "${ORIGINAL_OPENCODE}.bak"
+    fi
+fi
+
 cp "$BINARY_PATH" ~/.opencode/bin/"$BINARY_NAME"
 ln -sf "$BINARY_NAME" ~/.opencode/bin/opencode
 
