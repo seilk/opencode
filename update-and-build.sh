@@ -76,11 +76,35 @@ else
     BINARY_PATH="dist/opencode-linux-x64/bin/opencode"
 fi
 
-ORIGINAL_OPENCODE=$(command -v opencode 2>/dev/null || true)
-if [ -n "$ORIGINAL_OPENCODE" ] && [ -f "$ORIGINAL_OPENCODE" ] && [ ! -L "$ORIGINAL_OPENCODE" ]; then
-    if [ ! -f "${ORIGINAL_OPENCODE}.bak" ]; then
-        echo "Backing up original opencode to ${ORIGINAL_OPENCODE}.bak"
-        cp "$ORIGINAL_OPENCODE" "${ORIGINAL_OPENCODE}.bak"
+BACKUP_PATH="$HOME/.opencode/bin/opencode.bak"
+if [ ! -f "$BACKUP_PATH" ]; then
+    ORIGINAL_OPENCODE=$(command -v opencode 2>/dev/null || true)
+    if [ -n "$ORIGINAL_OPENCODE" ] && [ -f "$ORIGINAL_OPENCODE" ] && [ ! -L "$ORIGINAL_OPENCODE" ]; then
+        echo "Backing up original opencode to $BACKUP_PATH"
+        cp "$ORIGINAL_OPENCODE" "$BACKUP_PATH"
+    else
+        echo "=== Downloading official release for backup ==="
+        if [[ "$OSTYPE" == "darwin"* ]]; then
+            if [[ "$(uname -m)" == "arm64" ]]; then
+                RELEASE_ASSET="opencode-darwin-arm64.zip"
+            else
+                RELEASE_ASSET="opencode-darwin-x64.zip"
+            fi
+        else
+            RELEASE_ASSET="opencode-linux-x64.tar.gz"
+        fi
+        DOWNLOAD_URL="https://github.com/anomalyco/opencode/releases/download/${LATEST_TAG}/${RELEASE_ASSET}"
+        curl -sL "$DOWNLOAD_URL" -o "$TMP_DIR/$RELEASE_ASSET"
+        if [[ "$RELEASE_ASSET" == *.zip ]]; then
+            unzip -q "$TMP_DIR/$RELEASE_ASSET" -d "$TMP_DIR/opencode-official"
+        else
+            mkdir -p "$TMP_DIR/opencode-official"
+            tar -xzf "$TMP_DIR/$RELEASE_ASSET" -C "$TMP_DIR/opencode-official"
+        fi
+        cp "$TMP_DIR/opencode-official/opencode" "$BACKUP_PATH"
+        chmod +x "$BACKUP_PATH"
+        rm -rf "$TMP_DIR/$RELEASE_ASSET" "$TMP_DIR/opencode-official"
+        echo "Downloaded official ${LATEST_TAG} as backup"
     fi
 fi
 
