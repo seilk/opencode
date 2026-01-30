@@ -72,6 +72,28 @@ echo "=== Committing changes ==="
 git add -A
 git commit -m "feat: apply custom patch on $LATEST_TAG"
 
+echo "=== Configuring PATH ==="
+PATH_LINE='export PATH="$HOME/.opencode/bin:$PATH"'
+SHELL_NAME=$(basename "$SHELL")
+case "$SHELL_NAME" in
+    zsh)  RC_FILE="$HOME/.zshrc" ;;
+    bash) RC_FILE="$HOME/.bashrc" ;;
+    *)    RC_FILE="" ;;
+esac
+
+if [ -n "$RC_FILE" ]; then
+    if ! grep -qF '.opencode/bin' "$RC_FILE" 2>/dev/null; then
+        echo "" >> "$RC_FILE"
+        echo "$PATH_LINE" >> "$RC_FILE"
+        echo "Added PATH to $RC_FILE"
+        echo "Run 'source $RC_FILE' or restart terminal to apply"
+    else
+        echo "PATH already configured in $RC_FILE"
+    fi
+else
+    echo "Unknown shell: $SHELL_NAME. Add manually: $PATH_LINE"
+fi
+
 echo ""
 echo "=== Done ==="
 echo "Binary: ~/.opencode/bin/$BINARY_NAME"
