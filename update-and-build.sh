@@ -49,7 +49,12 @@ else
 fi
 
 CURRENT_BUN=$(bun --version)
-sed -i "s/\"packageManager\": \"bun@[^\"]*\"/\"packageManager\": \"bun@$CURRENT_BUN\"/" package.json
+# Cross-platform sed -i (macOS BSD vs GNU)
+if [[ "$OSTYPE" == "darwin"* ]]; then
+    sed -i "" "s/\"packageManager\": \"bun@[^\"]*\"/\"packageManager\": \"bun@$CURRENT_BUN\"/" package.json
+else
+    sed -i "s/\"packageManager\": \"bun@[^\"]*\"/\"packageManager\": \"bun@$CURRENT_BUN\"/" package.json
+fi
 
 echo "=== Building ==="
 bun install
