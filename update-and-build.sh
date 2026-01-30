@@ -65,7 +65,18 @@ bun run build
 echo "=== Installing ==="
 BINARY_NAME="opencode-fix-gemini-${LATEST_TAG}"
 mkdir -p ~/.opencode/bin
-cp dist/opencode-linux-x64/bin/opencode ~/.opencode/bin/"$BINARY_NAME"
+
+if [[ "$OSTYPE" == "darwin"* ]]; then
+    if [[ "$(uname -m)" == "arm64" ]]; then
+        BINARY_PATH="dist/opencode-darwin-arm64/bin/opencode"
+    else
+        BINARY_PATH="dist/opencode-darwin-x64/bin/opencode"
+    fi
+else
+    BINARY_PATH="dist/opencode-linux-x64/bin/opencode"
+fi
+
+cp "$BINARY_PATH" ~/.opencode/bin/"$BINARY_NAME"
 ln -sf "$BINARY_NAME" ~/.opencode/bin/opencode
 
 echo "=== Committing changes ==="
