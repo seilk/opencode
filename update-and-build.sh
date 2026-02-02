@@ -29,21 +29,34 @@ if [ "$CURRENT_VERSION" = "$LATEST_TAG" ]; then
     exit 0
 fi
 
-echo "=== Backing up patch ==="
+echo "=== Backing up patches ==="
 cp "$REPO_DIR/patches/fix-gemini-finish-reason.patch" "$TMP_DIR/fix-gemini-finish-reason.patch"
+cp "$REPO_DIR/patches/fix-claude-thinking-blocks.patch" "$TMP_DIR/fix-claude-thinking-blocks.patch"
 
 BRANCH_NAME="fix-gemini-finish-reason-${LATEST_TAG}"
 echo "=== Creating branch: $BRANCH_NAME ==="
 
 git checkout -B "$BRANCH_NAME" "$LATEST_TAG"
 
-echo "=== Applying patch ==="
+echo "=== Applying patches ==="
+# Apply Gemini patch
 if git apply --check "$TMP_DIR/fix-gemini-finish-reason.patch" 2>/dev/null; then
     git apply "$TMP_DIR/fix-gemini-finish-reason.patch"
 else
-    echo "Trying 3-way merge..."
+    echo "Trying 3-way merge for Gemini patch..."
     git apply --3way "$TMP_DIR/fix-gemini-finish-reason.patch" || {
-        echo "ERROR: Patch failed. Manual intervention required."
+        echo "ERROR: Gemini patch failed. Manual intervention required."
+        exit 1
+    }
+fi
+
+# Apply Claude thinking blocks patch
+if git apply --check "$TMP_DIR/fix-claude-thinking-blocks.patch" 2>/dev/null; then
+    git apply "$TMP_DIR/fix-claude-thinking-blocks.patch"
+else
+    echo "Trying 3-way merge for Claude thinking blocks patch..."
+    git apply --3way "$TMP_DIR/fix-claude-thinking-blocks.patch" || {
+        echo "ERROR: Claude thinking blocks patch failed. Manual intervention required."
         exit 1
     }
 fi

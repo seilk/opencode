@@ -6,12 +6,13 @@ This document explains how to manage custom patched versions of OpenCode.
 
 ```
 ~/opencode-custom/
-├── AGENTS.md                              # This document
-├── README.md                              # Usage summary
+├── AGENTS.md                                # This document
+├── README.md                                # Usage summary
 ├── .gitignore
 ├── patches/
-│   └── fix-gemini-finish-reason.patch     # Patch files
-└── update-and-build.sh                    # Build script
+│   ├── fix-gemini-finish-reason.patch       # Gemini/LiteLLM finish_reason fix
+│   └── fix-claude-thinking-blocks.patch     # Claude Extended Thinking fix
+└── update-and-build.sh                      # Build script
 ```
 
 ### Branch Structure
@@ -41,6 +42,16 @@ This document explains how to manage custom patched versions of OpenCode.
 **Modified File**: `packages/opencode/src/session/prompt.ts`
 
 **Fix**: Check for tool call existence in message parts regardless of `finish_reason` value.
+
+### 2. fix-claude-thinking-blocks.patch
+
+**Problem**: When using Claude Opus 4.5 with Extended Thinking enabled through GitHub Copilot, API throws error: `"messages.3.content.0.thinking: each thinking block must contain thinking"`. This causes the agent to fail when empty thinking blocks are sent to the API.
+
+**Cause**: Claude Opus 4.5 Extended Thinking API requires that every `thinking` block must have non-empty content with a valid `signature` field. Empty thinking blocks violate this constraint.
+
+**Modified File**: `packages/opencode/src/session/message-v2.ts` (line ~586-592)
+
+**Fix**: Filter out empty reasoning/thinking blocks before sending to API. Only include blocks with non-empty text content. Non-empty blocks with `providerMetadata.anthropic.signature` are preserved correctly.
 
 ---
 
