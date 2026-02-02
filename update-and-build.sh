@@ -76,7 +76,7 @@ rm -rf dist
 bun run build
 
 echo "=== Installing ==="
-BINARY_NAME="opencode-fix-gemini-${LATEST_TAG}"
+BINARY_NAME="opencode-custom-${LATEST_TAG}"
 mkdir -p ~/.opencode/bin
 
 if [[ "$OSTYPE" == "darwin"* ]]; then
