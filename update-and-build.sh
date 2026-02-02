@@ -23,7 +23,7 @@ if [ -z "$LATEST_TAG" ]; then
 fi
 echo "Latest tag: $LATEST_TAG"
 
-CURRENT_VERSION=$(git branch -l 'fix-gemini-finish-reason-v*' | sort -V | tail -1 | sed 's/.*-\(v[0-9.]*\)/\1/')
+CURRENT_VERSION=$(git branch -l 'opencode-custom-v*' | sort -V | tail -1 | sed 's/.*-\(v[0-9.]*\)/\1/')
 if [ "$CURRENT_VERSION" = "$LATEST_TAG" ]; then
     echo "Already up to date: $LATEST_TAG"
     exit 0
@@ -33,7 +33,7 @@ echo "=== Backing up patches ==="
 cp "$REPO_DIR/patches/fix-gemini-finish-reason.patch" "$TMP_DIR/fix-gemini-finish-reason.patch"
 cp "$REPO_DIR/patches/fix-claude-thinking-blocks.patch" "$TMP_DIR/fix-claude-thinking-blocks.patch"
 
-BRANCH_NAME="fix-gemini-finish-reason-${LATEST_TAG}"
+BRANCH_NAME="opencode-custom-${LATEST_TAG}"
 echo "=== Creating branch: $BRANCH_NAME ==="
 
 git checkout -B "$BRANCH_NAME" "$LATEST_TAG"
