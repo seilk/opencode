@@ -584,11 +584,15 @@ export namespace MessageV2 {
               })
           }
           if (part.type === "reasoning") {
-            assistantMessage.parts.push({
-              type: "reasoning",
-              text: part.text,
-              ...(differentModel ? {} : { providerMetadata: part.metadata }),
-            })
+            // Only include reasoning/thinking blocks if they have content
+            // Empty thinking blocks cause API errors: "each thinking block must contain thinking"
+            if (part.text && part.text.trim().length > 0) {
+              assistantMessage.parts.push({
+                type: "reasoning",
+                text: part.text,
+                ...(differentModel ? {} : { providerMetadata: part.metadata }),
+              })
+            }
           }
         }
         if (assistantMessage.parts.length > 0) {
