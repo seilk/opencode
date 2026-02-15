@@ -315,10 +315,17 @@ export namespace SessionPrompt {
       }
 
       if (!lastUser) throw new Error("No user message found in stream. This should never happen.")
+
+      // Workaround: some providers (e.g., Gemini via LiteLLM) can return "stop" instead of
+      // "tool-calls" in streaming mode even when tool parts exist.
+      const lastAssistantMsg = lastAssistant ? msgs.find((m) => m.info.id === lastAssistant.id) : undefined
+      const hasToolParts = lastAssistantMsg?.parts.some((p) => p.type === "tool")
+      const effectiveFinishReason = hasToolParts ? "tool-calls" : lastAssistant?.finish
+
       if (
-        lastAssistant?.finish &&
-        !["tool-calls", "unknown"].includes(lastAssistant.finish) &&
-        lastUser.id < lastAssistant.id
+        effectiveFinishReason &&
+        !["tool-calls", "unknown"].includes(effectiveFinishReason) &&
+        lastUser.id < lastAssistant!.id
       ) {
         log.info("exiting loop", { sessionID })
         break
