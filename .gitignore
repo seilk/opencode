@@ -1,3 +1,20 @@
+# Wrapper repo ignores (this repo is just patches + scripts)
+
+# Upstream worktree
+opencode/
+
+# Old local artifacts (kept untracked)
+packages/
+.turbo/
+
+# Build artifacts
 node_modules/
 dist/
 *.log
+
+# macOS
+.DS_Store
+
+# Misc local docs/patch experiments
+PR_DESCRIPTION.md
+oauth-context1m-oauth.patch

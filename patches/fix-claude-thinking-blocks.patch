@@ -1,8 +1,8 @@
 diff --git a/packages/opencode/src/session/message-v2.ts b/packages/opencode/src/session/message-v2.ts
-index 6358c6c5e..24353447f 100644
+index 178751a22..5c803799d 100644
 --- a/packages/opencode/src/session/message-v2.ts
 +++ b/packages/opencode/src/session/message-v2.ts
-@@ -584,11 +584,15 @@ export namespace MessageV2 {
+@@ -670,11 +670,15 @@ export namespace MessageV2 {
                })
            }
            if (part.type === "reasoning") {
@@ -11,8 +11,8 @@ index 6358c6c5e..24353447f 100644
 -              text: part.text,
 -              ...(differentModel ? {} : { providerMetadata: part.metadata }),
 -            })
-+            // Only include reasoning/thinking blocks if they have content
-+            // Empty thinking blocks cause API errors: "each thinking block must contain thinking"
++            // Only include reasoning/thinking blocks if they have content.
++            // Empty thinking blocks can cause provider/API errors.
 +            if (part.text && part.text.trim().length > 0) {
 +              assistantMessage.parts.push({
 +                type: "reasoning",

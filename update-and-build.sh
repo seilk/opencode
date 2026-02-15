@@ -1,156 +1,179 @@
-#!/bin/bash
-set -e
+#!/usr/bin/env bash
+set -euo pipefail
 
-REPO_DIR="$(cd "$(dirname "$0")" && pwd)"
-TMP_DIR="$HOME/tmp"
+# update-and-build.sh
+#
+# This repo is a thin wrapper that stores local patches, and builds an upstream
+# OpenCode checkout in a *separate git worktree*.
+#
+# Why:
+# - Avoids dirty working tree / branch checkout failures on this wrapper repo
+# - Keeps a stable directory that always contains a built OpenCode binary
+# - Allows ~/.opencode/bin/opencode to symlink directly into this repo
+
+REPO_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+UPSTREAM_URL_DEFAULT="https://github.com/anomalyco/opencode.git"
+OPENCODE_DIR="$REPO_DIR/opencode"
+PATCH_DIR="$REPO_DIR/patches"
+
+BIN_LINK_DIR="$HOME/.opencode/bin"
+BIN_LINK_PATH="$BIN_LINK_DIR/opencode"
 
 cd "$REPO_DIR"
 
-mkdir -p "$TMP_DIR"
+# =============================================================================
+# Preconditions
+# =============================================================================
+if ! command -v bun >/dev/null 2>&1; then
+  echo "ERROR: bun is required. Install bun first (https://bun.sh)" >&2
+  exit 1
+fi
 
-if ! git remote get-url upstream &>/dev/null; then
-    echo "=== Adding upstream remote ==="
-    git remote add upstream https://github.com/anomalyco/opencode.git
+if ! git rev-parse --is-inside-work-tree >/dev/null 2>&1; then
+  echo "ERROR: Not inside a git repository: $REPO_DIR" >&2
+  exit 1
+fi
+
+# =============================================================================
+# Setup upstream remote
+# =============================================================================
+if ! git remote get-url upstream >/dev/null 2>&1; then
+  echo "=== Adding upstream remote ==="
+  git remote add upstream "$UPSTREAM_URL_DEFAULT"
 fi
 
 echo "=== Fetching latest from upstream ==="
 git fetch upstream --tags
 
-LATEST_TAG=$(git tag -l 'v1.*' | sort -V | tail -1)
-if [ -z "$LATEST_TAG" ]; then
-    echo "ERROR: No tags found. Make sure upstream is accessible."
-    exit 1
+# Only consider release tags like v1.2.4 (ignore tags like vscode-v0.0.13)
+LATEST_TAG="$(git tag -l 'v[0-9]*' --sort=-v:refname | head -1)"
+if [[ -z "$LATEST_TAG" ]]; then
+  echo "ERROR: No tags found. Make sure upstream is accessible." >&2
+  exit 1
 fi
+
+BRANCH_NAME="custom-${LATEST_TAG}"
+VERSION="${LATEST_TAG#v}"
+
 echo "Latest tag: $LATEST_TAG"
+echo "Target branch: $BRANCH_NAME"
 
-CURRENT_VERSION=$(git branch -l 'opencode-custom-v*' | sort -V | tail -1 | sed 's/.*-\(v[0-9.]*\)/\1/')
-if [ "$CURRENT_VERSION" = "$LATEST_TAG" ]; then
-    echo "Already up to date: $LATEST_TAG"
-    exit 0
+# =============================================================================
+# Ensure opencode worktree exists (or refresh it)
+# =============================================================================
+if [[ ! -d "$OPENCODE_DIR" ]]; then
+  echo "=== Creating opencode worktree: $OPENCODE_DIR ==="
+  git worktree add "$OPENCODE_DIR" -b "$BRANCH_NAME" "$LATEST_TAG"
+else
+  if ! git -C "$OPENCODE_DIR" rev-parse --git-dir >/dev/null 2>&1; then
+    echo "ERROR: '$OPENCODE_DIR' exists but is not a git worktree." >&2
+    echo "Move it aside and re-run." >&2
+    exit 1
+  fi
+
+  echo "=== Refreshing opencode worktree ==="
+  git -C "$OPENCODE_DIR" reset --hard
+  git -C "$OPENCODE_DIR" clean -fdx
+  git -C "$OPENCODE_DIR" checkout -B "$BRANCH_NAME" "$LATEST_TAG"
 fi
 
-echo "=== Backing up patches ==="
-cp "$REPO_DIR/patches/fix-gemini-finish-reason.patch" "$TMP_DIR/fix-gemini-finish-reason.patch"
-cp "$REPO_DIR/patches/fix-claude-thinking-blocks.patch" "$TMP_DIR/fix-claude-thinking-blocks.patch"
-
-BRANCH_NAME="opencode-custom-${LATEST_TAG}"
-echo "=== Creating branch: $BRANCH_NAME ==="
-
-git checkout -B "$BRANCH_NAME" "$LATEST_TAG"
-
-echo "=== Applying patches ==="
-# Apply Gemini patch
-if git apply --check "$TMP_DIR/fix-gemini-finish-reason.patch" 2>/dev/null; then
-    git apply "$TMP_DIR/fix-gemini-finish-reason.patch"
-else
-    echo "Trying 3-way merge for Gemini patch..."
-    git apply --3way "$TMP_DIR/fix-gemini-finish-reason.patch" || {
-        echo "ERROR: Gemini patch failed. Manual intervention required."
-        exit 1
+# =============================================================================
+# Apply patches in opencode worktree
+# =============================================================================
+apply_patch() {
+  local patch="$1"
+  if git -C "$OPENCODE_DIR" apply --check "$patch" >/dev/null 2>&1; then
+    git -C "$OPENCODE_DIR" apply "$patch"
+  else
+    echo "Patch did not apply cleanly; trying 3-way: $(basename "$patch")"
+    git -C "$OPENCODE_DIR" apply --3way "$patch" || {
+      echo "ERROR: Patch failed: $patch" >&2
+      exit 1
     }
-fi
+  fi
+}
 
-# Apply Claude thinking blocks patch
-if git apply --check "$TMP_DIR/fix-claude-thinking-blocks.patch" 2>/dev/null; then
-    git apply "$TMP_DIR/fix-claude-thinking-blocks.patch"
+if [[ -d "$PATCH_DIR" ]]; then
+  shopt -s nullglob
+  PATCHES=("$PATCH_DIR"/*.patch)
+  shopt -u nullglob
+
+  if (( ${#PATCHES[@]} > 0 )); then
+    echo "=== Applying patches (${#PATCHES[@]}) ==="
+    for p in "${PATCHES[@]}"; do
+      echo "- $(basename "$p")"
+      apply_patch "$p"
+    done
+  else
+    echo "=== No patches found in $PATCH_DIR (skipping) ==="
+  fi
 else
-    echo "Trying 3-way merge for Claude thinking blocks patch..."
-    git apply --3way "$TMP_DIR/fix-claude-thinking-blocks.patch" || {
-        echo "ERROR: Claude thinking blocks patch failed. Manual intervention required."
-        exit 1
-    }
+  echo "=== Patch dir not found: $PATCH_DIR (skipping) ==="
 fi
 
-CURRENT_BUN=$(bun --version)
-# Cross-platform sed -i (macOS BSD vs GNU)
-if [[ "$OSTYPE" == "darwin"* ]]; then
-    sed -i "" "s/\"packageManager\": \"bun@[^\"]*\"/\"packageManager\": \"bun@$CURRENT_BUN\"/" package.json
-else
-    sed -i "s/\"packageManager\": \"bun@[^\"]*\"/\"packageManager\": \"bun@$CURRENT_BUN\"/" package.json
-fi
-
-echo "=== Building ==="
-bun install
-cd packages/opencode
-rm -rf dist
-bun run build
-
-echo "=== Installing ==="
-BINARY_NAME="opencode-custom-${LATEST_TAG}"
-mkdir -p ~/.opencode/bin
-
-if [[ "$OSTYPE" == "darwin"* ]]; then
+# =============================================================================
+# Build in opencode worktree
+# =============================================================================
+resolve_bin_path() {
+  local base_dir="$1"
+  if [[ "$OSTYPE" == "darwin"* ]]; then
     if [[ "$(uname -m)" == "arm64" ]]; then
-        BINARY_PATH="dist/opencode-darwin-arm64/bin/opencode"
+      echo "$base_dir/opencode-darwin-arm64/bin/opencode"
     else
-        BINARY_PATH="dist/opencode-darwin-x64/bin/opencode"
+      echo "$base_dir/opencode-darwin-x64/bin/opencode"
     fi
-else
-    BINARY_PATH="dist/opencode-linux-x64/bin/opencode"
+  else
+    echo "$base_dir/opencode-linux-x64/bin/opencode"
+  fi
+}
+
+echo "=== Installing dependencies (opencode worktree) ==="
+(
+  cd "$OPENCODE_DIR"
+  bun install
+)
+
+echo "=== Building opencode (opencode worktree) ==="
+(
+  cd "$OPENCODE_DIR"
+  bun run --cwd packages/opencode build
+)
+
+BIN_TARGET="$(resolve_bin_path "$OPENCODE_DIR/packages/opencode/dist")"
+if [[ ! -f "$BIN_TARGET" ]]; then
+  echo "ERROR: Built binary not found at: $BIN_TARGET" >&2
+  exit 1
 fi
+chmod +x "$BIN_TARGET" || true
 
-BACKUP_PATH="$HOME/.opencode/bin/opencode.bak"
-if [ ! -f "$BACKUP_PATH" ]; then
-    ORIGINAL_OPENCODE=$(command -v opencode 2>/dev/null || true)
-    if [ -n "$ORIGINAL_OPENCODE" ] && [ -f "$ORIGINAL_OPENCODE" ] && [ ! -L "$ORIGINAL_OPENCODE" ]; then
-        echo "Backing up original opencode to $BACKUP_PATH"
-        cp "$ORIGINAL_OPENCODE" "$BACKUP_PATH"
-    else
-        echo "=== Downloading official release for backup ==="
-        if [[ "$OSTYPE" == "darwin"* ]]; then
-            if [[ "$(uname -m)" == "arm64" ]]; then
-                RELEASE_ASSET="opencode-darwin-arm64.zip"
-            else
-                RELEASE_ASSET="opencode-darwin-x64.zip"
-            fi
-        else
-            RELEASE_ASSET="opencode-linux-x64.tar.gz"
-        fi
-        DOWNLOAD_URL="https://github.com/anomalyco/opencode/releases/download/${LATEST_TAG}/${RELEASE_ASSET}"
-        curl -sL "$DOWNLOAD_URL" -o "$TMP_DIR/$RELEASE_ASSET"
-        if [[ "$RELEASE_ASSET" == *.zip ]]; then
-            unzip -q "$TMP_DIR/$RELEASE_ASSET" -d "$TMP_DIR/opencode-official"
-        else
-            mkdir -p "$TMP_DIR/opencode-official"
-            tar -xzf "$TMP_DIR/$RELEASE_ASSET" -C "$TMP_DIR/opencode-official"
-        fi
-        cp "$TMP_DIR/opencode-official/opencode" "$BACKUP_PATH"
-        chmod +x "$BACKUP_PATH"
-        rm -rf "$TMP_DIR/$RELEASE_ASSET" "$TMP_DIR/opencode-official"
-        echo "Downloaded official ${LATEST_TAG} as backup"
-    fi
-fi
+# =============================================================================
+# Commit so the opencode worktree remains clean (prevents future checkout issues)
+# =============================================================================
+(
+  cd "$OPENCODE_DIR"
+  git add -A
+  git -c user.name="opencode-custom" -c user.email="opencode-custom@local" \
+    commit -m "feat: apply local patches on ${LATEST_TAG}" >/dev/null 2>&1 || true
+)
 
-cp "$BINARY_PATH" ~/.opencode/bin/"$BINARY_NAME"
-ln -sf "$BINARY_NAME" ~/.opencode/bin/opencode
+# =============================================================================
+# Symlink ~/.opencode/bin/opencode -> this repo's built binary
+# =============================================================================
+mkdir -p "$BIN_LINK_DIR"
+ln -sf "$BIN_TARGET" "$BIN_LINK_PATH"
 
-echo "=== Committing changes ==="
-git add -A
-git commit -m "feat: apply custom patch on $LATEST_TAG"
+# =============================================================================
+# Done
+# =============================================================================
+echo
+echo "=========================================="
+echo "  Build complete: v$VERSION (patched)"
+echo "=========================================="
+echo
 
-echo "=== Configuring PATH ==="
-PATH_LINE='export PATH="$HOME/.opencode/bin:$PATH"'
-SHELL_NAME=$(basename "$SHELL")
-case "$SHELL_NAME" in
-    zsh)  RC_FILE="$HOME/.zshrc" ;;
-    bash) RC_FILE="$HOME/.bashrc" ;;
-    *)    RC_FILE="" ;;
-esac
-
-if [ -n "$RC_FILE" ]; then
-    if ! grep -qF '.opencode/bin' "$RC_FILE" 2>/dev/null; then
-        echo "" >> "$RC_FILE"
-        echo "$PATH_LINE" >> "$RC_FILE"
-        echo "Added PATH to $RC_FILE"
-        echo "Run 'source $RC_FILE' or restart terminal to apply"
-    else
-        echo "PATH already configured in $RC_FILE"
-    fi
-else
-    echo "Unknown shell: $SHELL_NAME. Add manually: $PATH_LINE"
-fi
-
-echo ""
-echo "=== Done ==="
-echo "Binary: ~/.opencode/bin/$BINARY_NAME"
-~/.opencode/bin/opencode --version
+echo "Binary (in repo):"
+echo "  $BIN_TARGET"
+echo "Symlink:"
+echo "  $BIN_LINK_PATH -> $BIN_TARGET"
+echo
+"$BIN_LINK_PATH" --version || true
