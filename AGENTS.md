@@ -59,6 +59,8 @@ If upstream changes and a patch cannot be applied:
 - A **repair log** is written to:
   - `~/opencode-custom/logs/patch-failure_<tag>_<timestamp>_<patchname>.md`
 
+Note: The script refreshes the worktree with `clean -fdx` before building. If the build fails after that, the previously-built binary inside the worktree may be removed. (If you want the same two-slot safety as `omo-custom`, we can add it.)
+
 The log contains:
 - which patch failed and whether it was `apply` vs `apply --3way`
 - `git status --porcelain`
