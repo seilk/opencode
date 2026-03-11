@@ -244,7 +244,7 @@ echo "=== Installing dependencies ==="
   || die "bun install failed in $BUILD_DIR"
 
 echo "=== Building ==="
-(cd "$BUILD_DIR" && bun run --cwd packages/opencode build) \
+(cd "$BUILD_DIR" && OPENCODE_CHANNEL=latest bun run --cwd packages/opencode build) \
   || die "bun run build failed in $BUILD_DIR"
 
 # =============================================================================

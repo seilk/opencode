@@ -1,0 +1,74 @@
+diff --git a/packages/opencode/src/storage/db.ts b/packages/opencode/src/storage/db.ts
+index cd920a8..cccc36a 100644
+--- a/packages/opencode/src/storage/db.ts
++++ b/packages/opencode/src/storage/db.ts
+@@ -12,7 +12,6 @@ import z from "zod"
+ import path from "path"
+ import { readFileSync, readdirSync, existsSync } from "fs"
+ import * as schema from "./schema"
+-import { Installation } from "../installation"
+ import { Flag } from "../flag/flag"
+ import { iife } from "@/util/iife"
+ 
+@@ -28,13 +27,7 @@ export const NotFoundError = NamedError.create(
+ const log = Log.create({ service: "db" })
+ 
+ export namespace Database {
+-  export const Path = iife(() => {
+-    const channel = Installation.CHANNEL
+-    if (["latest", "beta"].includes(channel) || Flag.OPENCODE_DISABLE_CHANNEL_DB)
+-      return path.join(Global.Path.data, "opencode.db")
+-    const safe = channel.replace(/[^a-zA-Z0-9._-]/g, "-")
+-    return path.join(Global.Path.data, `opencode-${safe}.db`)
+-  })
++  export const Path = iife(() => path.join(Global.Path.data, "opencode.db"))
+ 
+   type Schema = typeof schema
+   export type Transaction = SQLiteTransaction<"sync", void, Schema>
+@@ -66,16 +59,17 @@ export namespace Database {
+       .map((entry) => entry.name)
+ 
+     const sql = dirs
+-      .map((name) => {
++      .flatMap((name) => {
+         const file = path.join(dir, name, "migration.sql")
+-        if (!existsSync(file)) return
+-        return {
+-          sql: readFileSync(file, "utf-8"),
+-          timestamp: time(name),
+-          name,
+-        }
++        if (!existsSync(file)) return []
++        return [
++          {
++            sql: readFileSync(file, "utf-8"),
++            timestamp: time(name),
++            name,
++          },
++        ]
+       })
+-      .filter(Boolean) as Journal
+ 
+     return sql.sort((a, b) => a.timestamp - b.timestamp)
+   }
+diff --git a/packages/opencode/test/storage/db.test.ts b/packages/opencode/test/storage/db.test.ts
+index 601289e..a1aacd2 100644
+--- a/packages/opencode/test/storage/db.test.ts
++++ b/packages/opencode/test/storage/db.test.ts
+@@ -1,14 +1,9 @@
+ import { describe, expect, test } from "bun:test"
+ import path from "path"
+-import { Installation } from "../../src/installation"
+ import { Database } from "../../src/storage/db"
+ 
+ describe("Database.Path", () => {
+-  test("returns database path for the current channel", () => {
+-    const file = path.basename(Database.Path)
+-    const expected = ["latest", "beta"].includes(Installation.CHANNEL)
+-      ? "opencode.db"
+-      : `opencode-${Installation.CHANNEL.replace(/[^a-zA-Z0-9._-]/g, "-")}.db`
+-    expect(file).toBe(expected)
++  test("returns the canonical database path", () => {
++    expect(path.basename(Database.Path)).toBe("opencode.db")
+   })
+ })
