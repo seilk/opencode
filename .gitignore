@@ -1,19 +1,19 @@
-# Wrapper repo ignores (this repo is just patches + scripts)
-
-# Upstream worktree
+# Build dir (shallow clone, disposable)
 opencode/
 
-# Old local artifacts (kept untracked)
-packages/
-.turbo/
-
-# Build artifacts
-node_modules/
-dist/
+# State
+state/
 
 # Logs
 logs/
 *.log
+
+# Old artifacts (safe to remove)
+packages/
+.turbo/
+node_modules/
+dist/
+.husky/
 
 # macOS
 .DS_Store

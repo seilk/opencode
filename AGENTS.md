@@ -1,113 +1,106 @@
-# opencode-custom — Wrapper Repo for Upstream OpenCode + Local Patches
+# opencode-custom
 
-This repo is intentionally **thin**.
+Thin wrapper repo: local patches on upstream [OpenCode](https://github.com/anomalyco/opencode).
 
-- `main` stores only:
-  - patch files (`patches/*.patch`)
-  - one build script (`update-and-build.sh`)
-  - docs
-- Upstream OpenCode source code lives in a **separate git worktree** at:
-  - `~/opencode-custom/opencode/`
-
-Goal: reliably track the latest upstream release, apply local patches, build a working `opencode` binary inside this repo, and keep branch switching clean.
+```
+~/opencode-custom/
+├── patches/*.patch        # local patches (tracked)
+├── update-and-build.sh    # build script (tracked)
+├── state/current-tag      # active version (gitignored)
+├── opencode/              # shallow clone + build (gitignored)
+└── logs/                  # failure reports (gitignored)
+```
 
 ---
 
-## Quick Start (the only command you usually need)
+## Quick Start
 
 ```bash
 cd ~/opencode-custom
-./update-and-build.sh
+./update-and-build.sh              # update to latest upstream tag
+./update-and-build.sh --reset      # nuke all local state, rebuild from scratch
+./update-and-build.sh --tag v1.2.0 # build a specific version
 ```
 
-What it does:
-1) Fetches upstream tags.
-2) Picks latest **release tag** like `v1.2.4` (ignores non-release tags like `vscode-v*`).
-3) Refreshes the worktree (`opencode/`) to a deterministic state:
-   - `reset --hard` + `clean -fdx`
-   - `checkout -B custom-<tag> <tag>`
-4) Applies every patch in `patches/*.patch`.
-5) Builds OpenCode.
-6) Commits the patched result inside the worktree branch so the worktree stays clean.
-7) Updates symlink:
-   - `/Users/seil/.opencode/bin/opencode` → the binary built inside this repo
+On a fresh machine:
+```bash
+git clone <this-repo> ~/opencode-custom
+cd ~/opencode-custom
+./update-and-build.sh
+# If bun is missing, the script installs it automatically.
+# Binary is symlinked to ~/.opencode/bin/opencode
+```
+
+---
+
+## How It Works
+
+1. Queries latest upstream tag via `git ls-remote` (no local upstream remote needed).
+2. Shallow-clones the target tag into `opencode/`.
+3. Applies all `patches/*.patch` in sorted order via `git apply`.
+4. Runs `bun install && bun run --cwd packages/opencode build`.
+5. Verifies the built binary exists and symlinks `~/.opencode/bin/opencode` to it.
+6. On failure: build dir left for inspection, previous binary untouched.
+
+The build dir is a fully independent shallow clone. No shared git state, no branch management.
 
 ---
 
 ## Outputs / Paths
 
-### Worktree
-- Upstream checkout (patched) lives at:
-  - `~/opencode-custom/opencode/`
-
-### Built binary
-- Built binary is created inside the worktree, e.g. on macOS arm64:
-  - `~/opencode-custom/opencode/packages/opencode/dist/opencode-darwin-arm64/bin/opencode`
-
-### System symlink
-- The terminal `opencode` command is wired to the repo build via:
-  - `/Users/seil/.opencode/bin/opencode` (symlink)
+- Built binary (macOS arm64): `~/opencode-custom/opencode/packages/opencode/dist/opencode-darwin-arm64/bin/opencode`
+- System symlink: `~/.opencode/bin/opencode` → built binary
 
 ---
 
-## Patch Failure Behavior (important)
+## Local Patches
 
-If upstream changes and a patch cannot be applied:
-- The script **stops immediately** (non-zero exit).
-- The wrapper repo (`~/opencode-custom`, `main`) stays clean.
-- The worktree (`~/opencode-custom/opencode/`) is left in the conflicted state for inspection.
-- A **repair log** is written to:
-  - `~/opencode-custom/logs/patch-failure_<tag>_<timestamp>_<patchname>.md`
+Current:
+- `patches/fix-claude-thinking-blocks.patch`
+- `patches/fix-gemini-finish-reason.patch`
 
-Note: The script refreshes the worktree with `clean -fdx` before building. If the build fails after that, the previously-built binary inside the worktree may be removed. (If you want the same two-slot safety as `omo-custom`, we can add it.)
-
-The log contains:
-- which patch failed and whether it was `apply` vs `apply --3way`
-- `git status --porcelain`
-- unmerged/conflicted file list
-- conflict marker snippets (<<<<<<< / ======= / >>>>>>>)
-- a short “agent next steps” recipe
+Patches are applied in alphabetical order. Prefix with `NNN-` for deterministic ordering.
 
 ---
 
-## Agent Repair Recipe (how to update patches for a new upstream tag)
+## Failure Behavior
 
-1) Open the worktree and see what’s conflicted:
+If a patch fails to apply:
+- Script stops immediately.
+- A failure report is written to `logs/patch-failure_<tag>_<timestamp>_<patchname>.md`.
+- The build dir is left as-is for manual inspection.
+
+---
+
+## Agent Repair Recipe
+
+1. Inspect the build dir:
 ```bash
 cd ~/opencode-custom/opencode
 git status
 ```
 
-2) Resolve conflicts and remove conflict markers from files.
-
-3) Validate build:
+2. Fix the patch conflicts, then validate:
 ```bash
-bun install
-bun run --cwd packages/opencode build
+bun install && bun run --cwd packages/opencode build
 ```
 
-4) Regenerate patch(es) against the upstream tag:
+3. Regenerate the patch:
 ```bash
-# From inside the worktree
-cd ~/opencode-custom/opencode
-
-# Example: regenerate one patch after fixing files
-git diff <tag> -- <files-you-changed> > ~/opencode-custom/patches/<patch-name>.patch
+git diff HEAD -- <files-you-changed> > ~/opencode-custom/patches/<patch-name>.patch
 ```
 
-5) Re-run the wrapper script to confirm clean apply/build:
+4. Re-run:
 ```bash
 cd ~/opencode-custom
-./update-and-build.sh
+./update-and-build.sh --reset
 ```
-
-6) Commit updates on wrapper `main` (patch + script/doc changes only).
 
 ---
 
-## Repo Rules (so it never gets messy again)
+## Repo Rules
 
-- Do not vendor upstream source into wrapper `main`.
-- Do not track `opencode/` (worktree) changes on wrapper `main`.
-- All local modifications must be expressed as `patches/*.patch`.
-- Logs go under `logs/` (ignored by git).
+- Wrapper `main` contains only patches, script, and docs.
+- All local modifications are expressed as `patches/*.patch`.
+- Build dir (`opencode/`) is a disposable shallow clone.
+- Never vendor upstream source into this repo.
