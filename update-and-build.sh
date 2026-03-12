@@ -181,7 +181,14 @@ else
   echo "=== Querying latest upstream tag ==="
   local_tags="$(git ls-remote --tags --sort=-v:refname "$UPSTREAM_URL" 'v[0-9]*' 2>&1)" \
     || die "Failed to query upstream tags at $UPSTREAM_URL (network error?)"
-  TARGET_TAG="$(echo "$local_tags" | grep -v '\^{}$' | head -1 | sed 's|.*refs/tags/||')"
+  # Parse first non-dereference tag using pure bash — no pipeline, no SIGPIPE
+  # (head -1 in a pipeline under set -euo pipefail causes SIGPIPE/exit 141 on Linux)
+  TARGET_TAG=""
+  while IFS=$'\t' read -r _hash _ref; do
+    [[ "$_ref" == *'^{}' ]] && continue
+    TARGET_TAG="${_ref##refs/tags/}"
+    break
+  done <<< "$local_tags"
 
   if [[ -z "$TARGET_TAG" ]]; then
     die "No tags found at $UPSTREAM_URL"
