@@ -29,6 +29,7 @@ import { batch, onMount } from "solid-js"
 import { Log } from "@/util/log"
 import type { Path } from "@opencode-ai/sdk"
 import type { Workspace } from "@opencode-ai/sdk/v2"
+import { sessionQuery } from "./session-query"
 
 export const { use: useSync, provider: SyncProvider } = createSimpleContext({
   name: "Sync",
@@ -355,12 +356,6 @@ export const { use: useSync, provider: SyncProvider } = createSimpleContext({
     const exit = useExit()
     const args = useArgs()
 
-    function sessionStart(config?: Config) {
-      const days = config?.session_history_days ?? 30
-      if (days <= 0) return undefined
-      return Date.now() - days * 24 * 60 * 60 * 1000
-    }
-
     async function bootstrap() {
       console.log("bootstrapping")
 
@@ -377,9 +372,8 @@ export const { use: useSync, provider: SyncProvider } = createSimpleContext({
       ]
 
       const sessionListPromise = configPromise.then((x) => {
-        const start = sessionStart(x.data!)
         return sdk.client.session
-          .list({ ...(start !== undefined ? { start } : {}) })
+          .list(sessionQuery(x.data!))
           .then((r) => (r.data ?? []).toSorted((a, b) => a.id.localeCompare(b.id)))
       })
 

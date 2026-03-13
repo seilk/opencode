@@ -1175,6 +1175,14 @@ export namespace Config {
         .describe(
           "Number of days of session history to load in the TUI session picker. 0 disables the time filter entirely (default: 30)",
         ),
+      session_history_limit: z
+        .number()
+        .int()
+        .min(0)
+        .optional()
+        .describe(
+          "Maximum number of root sessions to load in the TUI session picker. 0 disables the count limit.",
+        ),
       compaction: z
         .object({
           auto: z.boolean().optional().describe("Enable automatic compaction when context is full (default: true)"),
